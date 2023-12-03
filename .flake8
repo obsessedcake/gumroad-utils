@@ -1,0 +1,18 @@
+[flake8]
+ignore =
+    # F812: list comprehension redefines ...
+    F812,
+    # H233: Python 3.x incompatible use of print operator
+    H233,
+    # H301: one import per line
+    H301,
+    # H401: docstring should not start with a space
+    H401,
+exclude =
+    __pycache__,
+    .git,
+    .venv,
+    build,
+    dist,
+    venv
+max-line-length = 120

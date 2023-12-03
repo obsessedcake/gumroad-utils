@@ -1,0 +1,33 @@
+name: linters
+
+on: [pull_request]
+
+jobs:
+  codespell:
+    runs-on: ubuntu-latest
+    name: Codespell
+    steps:
+      - uses: codespell-project/actions-codespell@v2
+        with:
+          check_filenames: true
+  flake8:
+    runs-on: ubuntu-latest
+    name: Lint python code
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v3
+      - name: Set up Python environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install .[dev]
+      - name: Run flake8
+        run: |
+          flake8 --exit-zero > ${GITHUB_WORKSPACE}/flake8-output.txt
+          cat ${GITHUB_WORKSPACE}/flake8-output.txt
+  readme:
+    runs-on: ubuntu-latest
+    name: Lint README
+    steps:
+      - uses: articulate/actions-markdownlint@v1
