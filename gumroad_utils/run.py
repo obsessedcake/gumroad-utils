@@ -22,7 +22,7 @@ def main() -> None:
 
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
-        format="[%(name)s] %(message)s",
+        format="%(message)s",
         datefmt="%X",
         handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
     )
@@ -43,6 +43,8 @@ def main() -> None:
         product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
     )
 
+    cache_file = cast("Path", args.config).parent / "gumroad.cache"
+
     try:
         if isinstance(args.link, str) and (args.link == "library"):
             links = []
@@ -54,7 +56,6 @@ def main() -> None:
                 logging.getLogger().debug("File with links is empty.")
                 return
 
-        cache_file = cast("Path", args.config).parent / "gumroad.cache"
         scrapper.load_cache(cache_file)
 
         if links:
@@ -64,9 +65,12 @@ def main() -> None:
         else:
             scrapper.scrape_library()
 
-        scrapper.save_cache(cache_file)
+    except KeyboardInterrupt:
+        logging.getLogger().error("Forcefully stopped.")
     except Exception:
         logging.getLogger().exception("")
+    finally:
+        scrapper.save_cache(cache_file)
 
 
 if __name__ == "__main__":

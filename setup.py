@@ -22,15 +22,15 @@ extras_require = {
 }
 
 setup(
-    name="gumroad_dowloader",
+    name="gumroad_utils",
     version="0.0.1",
     author="Obsessed Cake",
     author_email="obsessed-cake@proton.me",
-    description="Easy to use gumroad.com content downloading tool.",
+    description="A set of useful utils for dumping and and wiping your gumroad.com library.",
     long_description=long_description,
     url="https://github.com/obsessedcake",
     packages=find_packages(),
-    entry_points={"console_scripts": ["gumroad-dl=gumroad_downloader.run:main"]},
+    entry_points={"console_scripts": ["gumroad-utils=gumroad_utils.run:main"]},
     license="GPL-3.0",
     classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

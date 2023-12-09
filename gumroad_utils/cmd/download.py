@@ -1,24 +1,25 @@
 import json
 import logging
+import random
+import time
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 import humanize
-from bs4 import BeautifulSoup
 from pathlib3x import Path
-from requests import Session as _RequestsSession
 from rich.progress import Progress as RichProgress
 
-if TYPE_CHECKING:
-    from bs4 import PageElement
+from gumroad_utils.misc.session import detect_redirect
 
-__all__ = ["GumroadScrapper", "GumroadSession"]
+if TYPE_CHECKING:
+    from bs4 import BeautifulSoup, PageElement
+
+    from gumroad_utils.misc.cache import Cache, DownloadStatus
+    from gumroad_utils.misc.session import GumroadSession
+
+__all__ = ["GumroadScrapper"]
 
 _ARCHIVES_EXT = {"rar", "zip"}
-
-
-def _sanitize_cookie_value(value: str) -> str:
-    return value.replace("+", "%2B").replace("/", "%2F").replace("=", "%3D")
 
 
 # https://www.xormedia.com/string-truncate-middle-with-ellipsis/
@@ -32,67 +33,31 @@ def shorten(s: str, n: int = 40) -> str:
     return "{0}..{1}".format(s[:n_1], s[-n_2:])
 
 
-class GumroadSession(_RequestsSession):
-    def __init__(self, app_session: str, guid: str, user_agent: str) -> None:
-        super().__init__()
-
-        self.cookies.set("_gumroad_app_session", _sanitize_cookie_value(app_session))
-        self.cookies.set("_gumroad_guid", guid)
-        self.headers["User-Agent"] = user_agent
-
-    @property
-    def base_url(self) -> str:
-        return "https://app.gumroad.com"
-
-    def get_soup(self, url: str) -> BeautifulSoup:
-        response = self.get(url, allow_redirects=False)
-        response.raise_for_status()
-        return BeautifulSoup(response.content, "lxml")
-
-
 class GumroadScrapper:
     def __init__(
-        self, session: GumroadSession, root_folder: Path, product_folder_tmpl: str
+        self, cache: "Cache", session: "GumroadSession", root_folder: Path, product_folder_tmpl: str
     ) -> None:
+        self._cache = cache
         self._session = session
         self._root_folder = root_folder
         self._product_folder_tmpl = product_folder_tmpl
-
-        self._files_cache: dict[str, set] = {}
         self._logger = logging.getLogger()
 
-    # Cache
+    # I/O
 
     def load_cache(self, file_path: Path) -> None:
-        if not file_path.exists():
-            return
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            for k, v in json.load(f).items():
-                self._files_cache[k] = set(v)
-
+        self._cache.load_cache(file_path)
         self._logger.debug("Cache has been loaded.")
 
     def save_cache(self, file_path: Path) -> None:
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(self._files_cache, f, default=list, indent=2)
-
+        self._cache.save_cache(file_path)
         self._logger.debug("Cache has been saved.")
-
-    def _is_file_cached(self, product_id: str, file_id: str) -> bool:
-        return file_id in self._files_cache.get(product_id, [])
-
-    def _cache_file(self, product_id: str, file_id: str) -> None:
-        if product_id not in self._files_cache:
-            self._files_cache[product_id] = set([file_id])
-        else:
-            self._files_cache[product_id].add(file_id)
 
     # Pages - Library
 
     def scrape_library(self) -> None:
-        soup = self._session.get_soup(self._session.base_url + "library")
-        self._detect_redirect(soup)
+        soup = self._session.get_soup("/library", short=True)
+        detect_redirect(soup)
 
         script = soup.find(
             "script",
@@ -103,6 +68,7 @@ class GumroadScrapper:
         )
         script = json.loads(script.string)
 
+        self._logger.info("Found %s products in your library.", len(script["results"]))
         for result in script["results"]:
             self.scrap_product_page(result["purchase"]["download_url"])
 
@@ -115,7 +81,7 @@ class GumroadScrapper:
         self._logger.info("Scrapping %r...", url)
 
         soup = self._session.get_soup(url)
-        self._detect_redirect(soup)
+        detect_redirect(soup)
 
         product_creator = soup.select_one(".paragraphs:nth-child(1) > .stack:nth-child(3) a").string
         product_name = soup.select_one("header h1").string
@@ -150,7 +116,7 @@ class GumroadScrapper:
             zip_url = url.replace("/d/", "/zip/")
             output = product_folder.append_suffix(".zip")
 
-            self._fancy_download_file(zip_url, Path("/"), output, transient=False)
+            self._fancy_download_file(zip_url, Path("/"), output, short_desc=True)
             return
 
         self._logger.info("Downloading %r product of %r creator...", product_name, product_creator)
@@ -164,7 +130,7 @@ class GumroadScrapper:
 
         self._traverse_tree(soup.select_one("div[role=tree]"), Path("/"), product_folder)
 
-    def _content_is_archive(self, product_page_soup: BeautifulSoup) -> bool:
+    def _content_is_archive(self, product_page_soup: "BeautifulSoup") -> bool:
         tree_elements = product_page_soup.select(".js-file-list-element")
         if len(tree_elements) > 1:
             return False
@@ -212,8 +178,11 @@ class GumroadScrapper:
                 file_path,
                 len(files),  # files_total_count
                 file_idx + 1,  # file_idx
-                transient=True,
             )
+
+            sleep_time = random.uniform(0.1, 2.0)
+            self._logger.debug("Sleepping for %s seconds.", sleep_time)
+            time.sleep(sleep_time)
 
         for folder in folders:
             folder_name = folder.select_one("h4").string
@@ -244,7 +213,7 @@ class GumroadScrapper:
         files_total_count: int = 0,
         file_idx: int = 0,
         *,
-        transient: bool
+        short_desc=False
     ) -> None:
         *_, product_id, file_id = url.split("/")
         if product_id == "zip":
@@ -252,7 +221,7 @@ class GumroadScrapper:
 
         tree_file_path = tree_path / file_path.name
 
-        if self._is_file_cached(product_id, file_id):
+        if self._cache.is_file_cached(product_id, file_id):
             self._logger.debug("'%s' is already downloaded! Skipping.", tree_file_path)
             return
 
@@ -265,14 +234,14 @@ class GumroadScrapper:
             return
 
         human_size = humanize.naturalsize(total_size_in_bytes)
-        if transient:
-            task_desc = f"[{file_idx}/{files_total_count}] Downloading '{shorten(file_path.name)}' ({human_size})..."
+        if short_desc:
+            task_desc = f"Downloading {human_size} file..."
         else:
-            task_desc = "Downloading {human_size} file..."
+            task_desc = f"[{file_idx}/{files_total_count}] Downloading '{shorten(file_path.name)}' file ({human_size})..."
 
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with RichProgress(expand=True, transient=transient) as progress:
+        with RichProgress(expand=True, transient=True) as progress:  # Fit logs and disappear after successful download.
             task = progress.add_task(task_desc, total=total_size_in_bytes)
 
             with file_path.open("wb") as file:
@@ -281,11 +250,4 @@ class GumroadScrapper:
                         progress.advance(task, len(chunk))
                         file.write(chunk)
 
-        self._cache_file(product_id, file_id)
-
-    # Utils
-
-    def _detect_redirect(self, soup: BeautifulSoup) -> None:
-        text = soup.find(text=True, recursive=False)
-        if text and ("You are being" in text):  # You are being redirected.
-            raise RuntimeError("You are being redirected to a login page!")
+        self._cache.cache_file(product_id, file_id)

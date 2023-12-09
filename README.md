@@ -1,6 +1,6 @@
-# gumroad-dl
+# gumroad-utils
 
-Easy to use [gumroad.com](gumroad.com) content downloading tool.
+A set of useful utils for dumping and and wiping your [gumroad.com](gumroad.com) library.
 
 **Table of contents** (generated with [markdown-toc](http://ecotrust-canada.github.io/markdown-toc/))
 
@@ -23,7 +23,7 @@ Nothing more, nothing else.
 Download this repository either by [this link](archive/refs/heads/master.zip) or by simply cloning this repo:
 
 ```bash
-git clone --depth 1 https://github.com/obsessedcake/gumroad-downloader.git
+git clone --depth 1 https://github.com/obsessedcake/gumroad-utils.git
 ```
 
 Then install all required python packages:
@@ -62,12 +62,12 @@ This project is exposed in two ways: as a [package](#package) and as a [command 
 
 ### Package
 
-This project exposes a `gumroad_downloader` package that exposes [gumroad.com](gumroad.com) API and can be used as shown below.
+This project exposes a `gumroad_utils` package that exposes [gumroad.com](gumroad.com) API and can be used as shown below.
 
 ```python
 from pathlib import Path
 
-from gumroad_downloader import GumroadScrapper, GumroadSession
+from gumroad_utils import GumroadScrapper, GumroadSession
 
 session = GumroadSession(
     app_session="MyAppSession",
@@ -87,25 +87,31 @@ Therefore if you want to configure it, you need to call [logging.basicConfig](ht
 
 ### Command Line Tool
 
-This project also exposes a simple `gumroad-dl` command that can either download your whole library or a single product.
+This project also exposes a simple `gumroad-utils` command that can either download your whole library or a single product.
 
 To download all products in your library, run one of below command:
 
 ```bash
-gumroad-dl
-gumroad-dl -c path/to/my-config.ini -o path/to/output/directory
+gumroad-utils
+gumroad-utils -c path/to/my-config.ini -o path/to/output/directory
 ```
 
 To download a single product, run one of below command:
 
 ```bash
-gumroad-dl https://app.gumroad.com/d/f0000000000000000000000000000000
-gumroad-dl f0000000000000000000000000000000
+gumroad-utils https://app.gumroad.com/d/f0000000000000000000000000000000
+gumroad-utils f0000000000000000000000000000000
 ```
 
 (`-c` and `-o` flags works the same way here.)
 
 ![downloading](.imgs/downloading.gif)
+
+## TODO
+
+- [ ] Improve caching.
+- [ ] Implement automatic wiping of all library products.
+- [ ] Implement payments statistic.
 
 ## License
 
