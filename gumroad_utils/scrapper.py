@@ -125,7 +125,7 @@ class GumroadScrapper:
 
         product_folder_name = self._product_folder_tmpl.format(
             product_name=product_name,
-            purchase_date=purchase_date,
+            purchase_at=purchase_date,
             price=price,
         )
         product_folder: "Path" = self._root_folder / product_creator / product_folder_name

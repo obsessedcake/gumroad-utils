@@ -52,7 +52,7 @@ You can customize product folder name by altering `product_folder_tmpl`.
 
 Following values currently can be used in template:
 
-- `purchase_date`: [datetime.date](https://docs.python.org/3/library/datetime.html#date-objects),
+- `purchase_at`: [datetime.date](https://docs.python.org/3/library/datetime.html#date-objects),
 - `product_name`: [str](https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str),
 - `price`: [str](https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str).
 
