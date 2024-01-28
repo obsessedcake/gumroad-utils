@@ -91,7 +91,7 @@ class GumroadScrapper:
     # Pages - Library
 
     def scrape_library(self) -> None:
-        soup = self._session.get_soup(self._session.base_url + "library")
+        soup = self._session.get_soup(self._session.base_url + "/library")
         self._detect_redirect(soup)
 
         script = soup.find(
@@ -110,7 +110,7 @@ class GumroadScrapper:
 
     def scrap_product_page(self, url: str) -> None:
         if url.isalnum():
-            url = self._session.base_url + url
+            url = f"{self._session.base_url}/d/{url}"
 
         self._logger.info("Scrapping %r...", url)
 
