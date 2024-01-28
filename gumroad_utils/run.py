@@ -1,5 +1,6 @@
 import gc
 import logging
+import signal
 import sys
 from configparser import RawConfigParser
 from typing import TYPE_CHECKING, cast
@@ -64,6 +65,12 @@ def main() -> None:
         cache_file = cast("Path", args.config).parent / "gumroad.cache"
         scrapper.load_cache(cache_file)
 
+        def sigint_handler(signal, frame):
+            scrapper.save_cache(cache_file)
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, sigint_handler)
+
         if links:
             for link in links:
                 scrapper.scrap_product_page(link)
@@ -78,4 +85,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
