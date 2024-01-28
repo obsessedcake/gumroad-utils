@@ -1,7 +1,6 @@
 import json
 import logging
-from datetime import date, datetime
-from typing import TYPE_CHECKING
+from datetime import datetime
 
 import humanize
 from bs4 import BeautifulSoup
@@ -9,12 +8,14 @@ from pathlib3x import Path
 from requests import Session as _RequestsSession
 from rich.progress import Progress as RichProgress
 
-if TYPE_CHECKING:
-    from bs4 import PageElement
-
 __all__ = ["GumroadScrapper", "GumroadSession"]
 
 _ARCHIVES_EXT = {"rar", "zip"}
+
+
+def _load_json_data(soup: BeautifulSoup) -> dict:
+    script = soup.find("script", attrs={"class": "js-react-on-rails-component"})
+    return json.loads(script.string)
 
 
 def _sanitize_cookie_value(value: str) -> str:
@@ -117,11 +118,14 @@ class GumroadScrapper:
         soup = self._session.get_soup(url)
         self._detect_redirect(soup)
 
-        product_creator = soup.select_one(".paragraphs:nth-child(1) > .stack:nth-child(3) a").string
-        product_name = soup.select_one("header h1").string
-        recipe_link = soup.select_one(".paragraphs:nth-child(1) > .stack:nth-child(2) a", href=True)["href"]
+        script = _load_json_data(soup)
 
-        purchase_date, price = self._scrap_recipe_page(recipe_link)
+        product_creator = script["creator"]["name"]
+        product_name = script["purchase"]["product_name"]
+        recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
+
+        purchase_date = datetime.fromisoformat(script["purchase"]["created_at"]).date()
+        price = self._scrap_recipe_page(recipe_link)
 
         product_folder_name = self._product_folder_tmpl.format(
             product_name=product_name,
@@ -154,15 +158,7 @@ class GumroadScrapper:
             return
 
         self._logger.info("Downloading %r product of %r creator...", product_name, product_creator)
-
-        files_count = len(soup.select(".js-file-list-element"))
-        folders_count = len(soup.select("div[role=treeitem]")) - files_count
-        if folders_count < 0:
-            folders_count = 0
-
-        self._logger.info("Found %r folder(s) and %r file(s) in total.", folders_count, files_count)
-
-        self._traverse_tree(soup.select_one("div[role=tree]"), Path("/"), product_folder)
+        self._download_content(script, product_folder)
 
     def _content_is_archive(self, product_page_soup: BeautifulSoup) -> bool:
         tree_elements = product_page_soup.select(".js-file-list-element")
@@ -172,76 +168,62 @@ class GumroadScrapper:
         file_type = tree_elements[0].select_one("li:nth-child(1)").string.strip().lower()
         return file_type in _ARCHIVES_EXT
 
-    def _traverse_tree(self, tree_root: "PageElement", tree_path: Path, parent_folder: Path) -> None:
-        self._logger.info("Downloading '%s'...", tree_path)
+    def _download_content(self, script: dict, parent_folder: Path) -> None:
+        product_id = script["purchase"]["product_id"]
 
-        first_tree_item = tree_root.find_next("div", attrs={"role": "treeitem"})
-        if not first_tree_item:
-            self._logger.warning("'%s' appeared to be empty!", tree_path)
-            return
+        def _traverse_tree(items: list[dict], tree_path: Path, parent_folder: Path) -> None:
+            files_count = 0
+            file_idx = 0
 
-        # NOTE(obsessedcake): 'select' and 'find_all_next' doesn't support non-recursive search.
-        #   So I came up with this ugly code.
-        other_tree_items = first_tree_item.find_next_siblings("div", attrs={"role": "treeitem"})
-        if other_tree_items:
-            tree_items = [first_tree_item, *other_tree_items]
-        else:
-            tree_items = [first_tree_item]
+            for item in items:
+                if item["type"] != "folder":
+                    files_count += 1
+                    continue
 
-        files: list["PageElement"] = []
-        folders: list["PageElement"] = []
+                folder_name = item["name"]
+                _traverse_tree(item["children"], tree_path / folder_name, parent_folder / folder_name)
 
-        for tree_item in tree_items:
-            if "js-file-list-element" in tree_item.get("class", []):
-                files.append(tree_item)
-            else:
-                folders.append(tree_item)
+            for item in items:
+                if item["type"] != "file":
+                    continue
 
-        self._logger.debug("Found %r files in '%s' folder.", len(files), tree_path)
-        self._logger.debug("Found %r folders in '%s' folder.", len(folders), tree_path)
+                file_id = item["id"]
+                file_name = item["file_name"]
+                file_type = item["extension"].lower()
+                file_url = self._session.base_url + item["download_url"]
 
-        for file_idx, file in enumerate(files):
-            file_type = file.select_one("li:nth-child(1)").string.lower()
-            file_name = file.select_one("h4").string
-            file_url = self._session.base_url + file.select_one("a", href=True)["href"]
+                file_path = (parent_folder / file_name).with_suffix("." + file_type)
+                file_idx += 1
 
-            file_path = (parent_folder / file_name).with_suffix("." + file_type)
-            self._fancy_download_file(
-                file_url,
-                tree_path,
-                file_path,
-                len(files),  # files_total_count
-                file_idx + 1,  # file_idx
-                transient=True,
-            )
+                self._fancy_download_file(
+                    product_id,
+                    file_id,
+                    file_url,
+                    tree_path,
+                    file_path,
+                    files_count,
+                    file_idx,
+                    transient=True,
+                )
 
-        for folder in folders:
-            folder_name = folder.select_one("h4").string
-            folder_content = folder.select_one("div[role=group]")
-
-            self._traverse_tree(folder_content, tree_path / folder_name, parent_folder / folder_name)
+        _traverse_tree(script["content"]["content_items"], Path("/"), parent_folder)
 
     # Pages - Recipe
 
-    def _scrap_recipe_page(self, url: str) -> tuple[date, str]:
+    def _scrap_recipe_page(self, url: str) -> str:
         soup = self._session.get_soup(url)
-
-        purchase_date = soup.select_one(".main > div:nth-child(1) > p").string.strip()
-
-        try:
-            purchase_date = datetime.strptime(purchase_date, "%B %d, %Y").date()  # February 14, 2022\n
-        except ValueError:
-            purchase_date = datetime.strptime(purchase_date, "%b %d, %Y").date()  # Feb 14, 2022\n
 
         payment_info = soup.select_one(".main > div:nth-child(1) > div").string
         price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
 
-        return purchase_date, price
+        return price
 
     # File downloader
 
     def _fancy_download_file(
         self,
+        product_id: str,
+        file_id: str,
         url: str,
         tree_path: Path,
         file_path: Path,
@@ -250,10 +232,6 @@ class GumroadScrapper:
         *,
         transient: bool
     ) -> None:
-        *_, product_id, file_id = url.split("/")
-        if product_id == "zip":
-            product_id, file_id = file_id, product_id
-
         tree_file_path = tree_path / file_path.name
 
         if self._is_file_cached(product_id, file_id):
