@@ -227,7 +227,11 @@ class GumroadScrapper:
         soup = self._session.get_soup(url)
 
         purchase_date = soup.select_one(".main > div:nth-child(1) > p").string.strip()
-        purchase_date = datetime.strptime(purchase_date, "%B %d, %Y").date()  # February 14, 2022\n
+
+        try:
+            purchase_date = datetime.strptime(purchase_date, "%B %d, %Y").date()  # February 14, 2022\n
+        except ValueError:
+            purchase_date = datetime.strptime(purchase_date, "%b %d, %Y").date()  # Feb 14, 2022\n
 
         payment_info = soup.select_one(".main > div:nth-child(1) > div").string
         price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
