@@ -1,7 +1,8 @@
 import json
 import logging
 import re
-from datetime import datetime
+import sys
+from datetime import date, datetime
 
 import humanize
 from bs4 import BeautifulSoup
@@ -108,11 +109,12 @@ class GumroadScrapper:
                 self._logger.debug("Skipping %r product, made by %r...", product, creator)
                 continue
 
-            self.scrap_product_page(result["purchase"]["download_url"])
+            updated_at = datetime.fromisoformat(result["product"]["updated_at"]).date()
+            self.scrap_product_page(result["purchase"]["download_url"], updated_at)
 
     # Pages - Product content
 
-    def scrap_product_page(self, url: str) -> None:
+    def scrap_product_page(self, url: str, uploaded_at: date | None = None) -> None:
         if url.isalnum():
             url = f"{self._session.base_url}/d/{url}"
 
@@ -130,11 +132,17 @@ class GumroadScrapper:
         purchase_date = datetime.fromisoformat(script["purchase"]["created_at"]).date()
         price = self._scrap_recipe_page(recipe_link)
 
-        product_folder_name = self._product_folder_tmpl.format(
-            product_name=product_name,
-            purchase_at=purchase_date,
-            price=price,
-        )
+        try:
+            product_folder_name = self._product_folder_tmpl.format(
+                product_name=product_name,
+                purchase_at=purchase_date,
+                uploaded_at=uploaded_at,
+                price=price,
+            )
+        except TypeError:
+            self._logger.info("'uploaded_at' is not available!")
+            sys.exit()
+
         product_folder: "Path" = self._root_folder / product_creator / product_folder_name
 
         # NOTE(obsessedcake): We might be able to download everything in a single zip archive.
