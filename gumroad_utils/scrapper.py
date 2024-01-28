@@ -15,8 +15,14 @@ __all__ = ["GumroadScrapper", "GumroadSession"]
 _ARCHIVES_EXT = {"rar", "zip"}
 
 
-def _load_json_data(soup: BeautifulSoup) -> dict:
-    script = soup.find("script", attrs={"class": "js-react-on-rails-component"})
+def _load_json_data(soup: BeautifulSoup, data_component_name: str) -> dict:
+    script = soup.find(
+        "script",
+        attrs={
+            "class": "js-react-on-rails-component",
+            "data-component-name": data_component_name,
+        },
+    )
     return json.loads(script.string)
 
 
@@ -97,7 +103,7 @@ class GumroadScrapper:
         soup = self._session.get_soup(self._session.base_url + "/library")
         self._detect_redirect(soup)
 
-        script = _load_json_data(soup)
+        script = _load_json_data(soup, "LibraryPage")
         for result in script["results"]:
             creator_profile_url = result["product"]["creator"]["profile_url"]
             creator_username = re.search(
@@ -125,7 +131,7 @@ class GumroadScrapper:
         soup = self._session.get_soup(url)
         self._detect_redirect(soup)
 
-        script = _load_json_data(soup)
+        script = _load_json_data(soup, "DownloadPageWithContent")
 
         product_creator = script["creator"]["name"]
         product_name = script["purchase"]["product_name"]
