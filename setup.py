@@ -6,6 +6,7 @@ with open("README.md", "r") as f:
 install_requires = [
     "beautifulsoup4",
     "humanize",
+    "lxml",
     "pathlib3x",
     "requests>=2.26.0",
     "rich>=13.0.0",
