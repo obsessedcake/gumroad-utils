@@ -3,15 +3,23 @@ import logging
 import signal
 import sys
 from configparser import RawConfigParser
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
+from pathlib3x import Path
 from rich.logging import RichHandler
 
 from .cli import get_cli_arg_parser
 from .scrapper import GumroadScrapper, GumroadSession
 
-if TYPE_CHECKING:
-    from pathlib3x import Path
+
+def _set_sigint_handler(scrapper: GumroadScrapper, cache_file: Path) -> None:
+    original_sigint_handler = signal.getsignal(signal.SIGINT)
+
+    def _sigint_handler(signal, frame):
+        scrapper.save_cache(cache_file)
+        original_sigint_handler(signal, frame)
+
+    signal.signal(signal.SIGINT, _sigint_handler)
 
 
 def main() -> None:
@@ -50,7 +58,7 @@ def main() -> None:
         elif isinstance(args.link, list):
             links = args.link
         elif args.links:
-            links = cast("Path", args.links).open().readlines()
+            links = cast(Path, args.links).open().readlines()
             if not links:
                 logging.getLogger().debug("File with links is empty.")
                 return
@@ -65,11 +73,7 @@ def main() -> None:
         cache_file = cast("Path", args.config).parent / "gumroad.cache"
         scrapper.load_cache(cache_file)
 
-        def sigint_handler(signal, frame):
-            scrapper.save_cache(cache_file)
-            sys.exit(0)
-
-        signal.signal(signal.SIGINT, sigint_handler)
+        _set_sigint_handler(scrapper, cache_file)
 
         if links:
             for link in links:
