@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime
 
 import humanize
@@ -91,20 +92,22 @@ class GumroadScrapper:
 
     # Pages - Library
 
-    def scrape_library(self) -> None:
+    def scrape_library(self, creators: set[str]) -> None:
         soup = self._session.get_soup(self._session.base_url + "/library")
         self._detect_redirect(soup)
 
-        script = soup.find(
-            "script",
-            attrs={
-                "class": "js-react-on-rails-component",
-                "data-component-name": "LibraryPage",
-            },
-        )
-        script = json.loads(script.string)
-
+        script = _load_json_data(soup)
         for result in script["results"]:
+            creator_profile_url = result["product"]["creator"]["profile_url"]
+            creator_username = re.search(r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url).group(1)
+
+            if creator_username not in creators:
+                creator = result["product"]["creator"]["name"]
+                product = result["product"]["name"]
+
+                self._logger.debug("Skipping %r product, made by %r...", product, creator)
+                continue
+
             self.scrap_product_page(result["purchase"]["download_url"])
 
     # Pages - Product content

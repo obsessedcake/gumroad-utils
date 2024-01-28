@@ -22,12 +22,28 @@ def get_cli_arg_parser() -> ArgumentParser:
         description="A simple downloader for gumroad.com products",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
+
+    links = parser.add_mutually_exclusive_group()
     parser.add_argument(
         "link",
         nargs="*",
         default="library",
         help="A product link or a list of them.",
     )
+    links.add_argument(
+        "-k",
+        "--creator",
+        nargs="*",
+        help="Download only products made by specified creators.",
+        default=None,
+    )
+    links.add_argument(
+        "-l",
+        "--links",
+        type=_is_valid_path,
+        help="A file with a list of products links.",
+    )
+
     parser.add_argument(
         "--debug",
         help="Enable debug mode.",
@@ -39,12 +55,6 @@ def get_cli_arg_parser() -> ArgumentParser:
         type=_is_valid_path,
         help="A path to configuration INI file.",
         default="config.ini",
-    )
-    parser.add_argument(
-        "-l",
-        "--links",
-        type=_is_valid_path,
-        help="A file with a list of products links.",
     )
     parser.add_argument(
         "-o",

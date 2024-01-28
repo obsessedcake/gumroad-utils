@@ -54,6 +54,13 @@ def main() -> None:
                 logging.getLogger().debug("File with links is empty.")
                 return
 
+        if isinstance(args.creator, str):
+            creators = {args.creator}
+        elif isinstance(args.creator, list):
+            creators = set(args.creator)
+        else:
+            creators = {}
+
         cache_file = cast("Path", args.config).parent / "gumroad.cache"
         scrapper.load_cache(cache_file)
 
@@ -62,7 +69,7 @@ def main() -> None:
                 scrapper.scrap_product_page(link)
                 gc.collect()
         else:
-            scrapper.scrape_library()
+            scrapper.scrape_library(creators)
 
     except Exception:
         logging.getLogger().exception("")
