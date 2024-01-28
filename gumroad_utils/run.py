@@ -64,9 +64,10 @@ def main() -> None:
         else:
             scrapper.scrape_library()
 
-        scrapper.save_cache(cache_file)
     except Exception:
         logging.getLogger().exception("")
+
+    scrapper.save_cache(cache_file)
 
 
 if __name__ == "__main__":
