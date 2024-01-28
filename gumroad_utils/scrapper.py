@@ -134,7 +134,11 @@ class GumroadScrapper:
         script = _load_json_data(soup, "DownloadPageWithContent")
 
         product_creator = script["creator"]["name"]
+
         product_name = script["purchase"]["product_name"]
+        if "/" in product_name:
+            self._logger.warning("Product has '/' in its name!")
+            product_name = product_name.replace("/", "-")
 
         recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
         price = self._scrap_recipe_page(recipe_link)
