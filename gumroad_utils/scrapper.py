@@ -110,11 +110,17 @@ class GumroadScrapper:
                 r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
             ).group(1)
 
-            if creator_username not in creators:
-                creator = result["product"]["creator"]["name"]
-                product = result["product"]["name"]
+            creator = result["product"]["creator"]["name"]
+            product = result["product"]["name"]
 
-                self._logger.debug("Skipping %r product, made by %r...", product, creator)
+            if creator_username not in creators:
+                self._logger.debug("Skipping %r product of %r.", product, creator)
+                continue
+
+            if result["product"]["is_bundle"]:
+                self._logger.info(
+                    "Skipping %r product of %r because it's a bundle!", product, creator
+                )
                 continue
 
             updated_at = datetime.fromisoformat(result["product"]["updated_at"]).date()
