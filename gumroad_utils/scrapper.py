@@ -100,7 +100,9 @@ class GumroadScrapper:
         script = _load_json_data(soup)
         for result in script["results"]:
             creator_profile_url = result["product"]["creator"]["profile_url"]
-            creator_username = re.search(r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url).group(1)
+            creator_username = re.search(
+                r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
+            ).group(1)
 
             if creator_username not in creators:
                 creator = result["product"]["creator"]["name"]
@@ -127,10 +129,10 @@ class GumroadScrapper:
 
         product_creator = script["creator"]["name"]
         product_name = script["purchase"]["product_name"]
-        recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
 
-        purchase_date = datetime.fromisoformat(script["purchase"]["created_at"]).date()
+        recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
         price = self._scrap_recipe_page(recipe_link)
+        purchase_date = datetime.fromisoformat(script["purchase"]["created_at"]).date()
 
         try:
             product_folder_name = self._product_folder_tmpl.format(
@@ -159,7 +161,7 @@ class GumroadScrapper:
             self._logger.info(
                 "Downloading %r product of %r creator as a zip archive.",
                 product_name,
-                product_creator
+                product_creator,
             )
 
             zip_url = url.replace("/d/", "/zip/")
@@ -192,7 +194,9 @@ class GumroadScrapper:
                     continue
 
                 folder_name = item["name"]
-                _traverse_tree(item["children"], tree_path / folder_name, parent_folder / folder_name)
+                _traverse_tree(
+                    item["children"], tree_path / folder_name, parent_folder / folder_name
+                )
 
             for item in items:
                 if item["type"] != "file":
@@ -241,7 +245,7 @@ class GumroadScrapper:
         files_total_count: int = 0,
         file_idx: int = 0,
         *,
-        transient: bool
+        transient: bool,
     ) -> None:
         tree_file_path = tree_path / file_path.name
 
@@ -252,9 +256,11 @@ class GumroadScrapper:
         response = self._session.get(url, stream=True)
         response.raise_for_status()
 
-        total_size_in_bytes = int(response.headers.get('content-length', 0))
+        total_size_in_bytes = int(response.headers.get("content-length", 0))
         if total_size_in_bytes == 0:
-            self._logger.warning("Failed to download '%s' file, received zero content length!", tree_file_path)
+            self._logger.warning(
+                "Failed to download '%s' file, received zero content length!", tree_file_path
+            )
             return
 
         human_size = humanize.naturalsize(total_size_in_bytes)
