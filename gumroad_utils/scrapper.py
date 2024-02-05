@@ -117,7 +117,7 @@ class GumroadScrapper:
                 self._logger.debug("Skipping %r product of %r.", product, creator)
                 continue
 
-            if result["product"]["is_bundle"]:
+            if result["purchase"]["is_bundle_purchase"]:
                 self._logger.info(
                     "Skipping %r product of %r because it's a bundle!", product, creator
                 )
