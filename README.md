@@ -8,8 +8,8 @@ A set of useful utils for dumping and and wiping your [gumroad.com](gumroad.com)
 - [Installation](#installation)
 - [Preparations](#preparations)
 - [Usage](#usage)
-  - [Package](#package)
-  - [Command Line Tool](#command-line-tool)
+  - [Download](#download)
+  - [Wipe](#wipe)
 - [License](#license)
 - [Notes](#notes)
 
@@ -59,59 +59,58 @@ Following values currently can be used in template:
 
 ## Usage
 
-This project is exposed in two ways: as a [package](#package) and as a [command line tool](#command-line-tool).
+This project also exposes a `gumroad-utils` command that has sub-commands with rich help messages that should answer most of your question.
 
-### Package
+But I would like to pull up some key points here:
 
-This project exposes a `gumroad_utils` package that exposes [gumroad.com](gumroad.com) API and can be used as shown below.
+- all command has it's own help message (`gumroad-utils -h`, `gumroad-utils dl -h`...);
+- all commands will use `config.ini` as a default configuration file if nothing else is specified.
 
-```python
-from pathlib import Path
-
-from gumroad_utils import GumroadScrapper, GumroadSession
-
-session = GumroadSession(
-    app_session="MyAppSession",
-    guid="MyGuid",
-    user_agent="MyUserAgent",
-)
-scrapper = GumroadScrapper(
-    session,
-    root_folder=Path.cwd(),
-    product_folder_tmpl="{product_name}",
-)
-scrapper.scrape_library()
-```
-
-It's also worth to mention that `GumroadScrapper` uses it's own logger instance.
-Therefore if you want to configure it, you need to call [logging.basicConfig](https://docs.python.org/3/library/logging.html#logging.basicConfig) before making a new instance of the `GumroadScrapper` class.
-
-### Command Line Tool
-
-This project also exposes a simple `gumroad-utils` command that can either download your whole library or a single product.
+### Download
 
 To download all products in your library, run one of below command:
 
 ```bash
-gumroad-utils
-gumroad-utils -c path/to/my-config.ini -o path/to/output/directory
+gumroad-utils dl 
+gumroad-utils dl -c path/to/my-config.ini -o path/to/output/directory
 ```
 
 To download a single product, run one of below command:
 
 ```bash
-gumroad-utils https://app.gumroad.com/d/f0000000000000000000000000000000
-gumroad-utils f0000000000000000000000000000000
+gumroad-utils dl https://app.gumroad.com/d/f0000000000000000000000000000000
+gumroad-utils dl f0000000000000000000000000000000
 ```
 
-(`-c` and `-o` flags works the same way here.)
+To download all products in your library created by specific creator, run one of below command:
+
+```bash
+gumroad-utils dl -k creator_user_name
+```
+
+> `creator_user_name` can be found from url: https://creator_user_name.gumroad.com.
 
 ![downloading](.imgs/downloading.gif)
+
+### Wipe
+
+To wipe all products in your library, run one of below command:
+
+```bash
+gumroad-utils wipe
+gumroad-utils wipe -k creator_user_name
+```
+
+> \- Will this really wipe my data?
+>
+> \- I don't know, I'm not affiliated with [gumroad](gumroad.com) by any means.
+> You can think about this option as a placebo.
+>
+> Because, for example, even if you delete purchase, you still can access a recipe for that purchase.
 
 ## TODO
 
 - [ ] Improve caching.
-- [ ] Implement automatic wiping of all library products.
 - [ ] Implement payments statistic.
 
 ## License

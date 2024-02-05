@@ -3,6 +3,7 @@ import logging
 import re
 import sys
 from datetime import date, datetime
+from typing import Callable
 
 import humanize
 from bs4 import BeautifulSoup
@@ -10,7 +11,7 @@ from pathlib3x import Path
 from requests import Session as _RequestsSession
 from rich.progress import Progress as RichProgress
 
-__all__ = ["GumroadScrapper", "GumroadSession"]
+__all__ = ["GumroadDownloader", "GumroadSession", "GumroadWiper"]
 
 _ARCHIVES_EXT = {"rar", "zip"}
 
@@ -56,19 +57,58 @@ class GumroadSession(_RequestsSession):
     def get_soup(self, url: str) -> BeautifulSoup:
         response = self.get(url, allow_redirects=False)
         response.raise_for_status()
-        return BeautifulSoup(response.content, "lxml")
+        
+        soup = BeautifulSoup(response.content, "lxml")
+        self._detect_redirect(soup)
+        return soup
+
+    def _detect_redirect(self, soup: BeautifulSoup) -> None:
+        text = soup.find(text=True, recursive=False)
+        if text and ("You are being" in text):  # You are being redirected.
+            raise RuntimeError("You are being redirected to a login page!")
 
 
-class GumroadScrapper:
+class GumroadScrapperBase:
+    def __init__(self, session: GumroadSession) -> None:
+        self._session = session
+        self._logger = logging.getLogger()
+
+    def _parse_library(self, creators: set[str], callback: Callable[[dict], None]) -> None:
+        soup = self._session.get_soup(self._session.base_url + "/library")
+
+        script = _load_json_data(soup, "LibraryPage")
+        for result in script["results"]:
+            creator_profile_url = result["product"]["creator"]["profile_url"]
+            creator_username = re.search(
+                r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
+            ).group(1)
+
+            creator = result["product"]["creator"]["name"]
+            product = result["product"]["name"]
+
+            if creators and (creator_username not in creators):
+                self._logger.debug("Skipping %r product of %r.", product, creator)
+                continue
+
+            if result["purchase"]["is_bundle_purchase"]:
+                self._logger.info(
+                    "Skipping %r product of %r because it's a bundle!", product, creator
+                )
+                continue
+
+            callback(result)
+
+
+class GumroadDownloader(GumroadScrapperBase):
     def __init__(
         self, session: GumroadSession, root_folder: Path, product_folder_tmpl: str
     ) -> None:
-        self._session = session
+        super().__init__(session)
+
         self._root_folder = root_folder
         self._product_folder_tmpl = product_folder_tmpl
 
         self._files_cache: dict[str, set] = {}
-        self._logger = logging.getLogger()
 
     # Cache
 
@@ -100,31 +140,11 @@ class GumroadScrapper:
     # Pages - Library
 
     def scrape_library(self, creators: set[str]) -> None:
-        soup = self._session.get_soup(self._session.base_url + "/library")
-        self._detect_redirect(soup)
-
-        script = _load_json_data(soup, "LibraryPage")
-        for result in script["results"]:
-            creator_profile_url = result["product"]["creator"]["profile_url"]
-            creator_username = re.search(
-                r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
-            ).group(1)
-
-            creator = result["product"]["creator"]["name"]
-            product = result["product"]["name"]
-
-            if creator_username not in creators:
-                self._logger.debug("Skipping %r product of %r.", product, creator)
-                continue
-
-            if result["purchase"]["is_bundle_purchase"]:
-                self._logger.info(
-                    "Skipping %r product of %r because it's a bundle!", product, creator
-                )
-                continue
-
+        def _handle(result: dict) -> None:
             updated_at = datetime.fromisoformat(result["product"]["updated_at"]).date()
             self.scrap_product_page(result["purchase"]["download_url"], updated_at)
+
+        self._parse_library(creators, _handle)
 
     # Pages - Product content
 
@@ -135,8 +155,6 @@ class GumroadScrapper:
         self._logger.info("Scrapping %r...", url)
 
         soup = self._session.get_soup(url)
-        self._detect_redirect(soup)
-
         script = _load_json_data(soup, "DownloadPageWithContent")
 
         product_creator = script["creator"]["name"]
@@ -298,9 +316,23 @@ class GumroadScrapper:
 
         self._cache_file(product_id, file_id)
 
-    # Utils
 
-    def _detect_redirect(self, soup: BeautifulSoup) -> None:
-        text = soup.find(text=True, recursive=False)
-        if text and ("You are being" in text):  # You are being redirected.
-            raise RuntimeError("You are being redirected to a login page!")
+class GumroadWiper(GumroadScrapperBase):
+    def wipe(self, creators: set[str]) -> None:
+        def _handle(result: dict) -> None:
+            self._logger.info(
+                "Deleting %r product of %r (%r).",
+                result["product"]["creator"]["name"],
+                result["product"]["name"],
+                result["purchase"]["download_url"],
+            )
+
+            url = f"{self._session.base_url}/library/purchase/{result['purchase']['id']}/delete"
+
+            response = self._session.patch(url)
+            response.raise_for_status()
+
+            if not response.json()["success"]:
+                self._logger.error("Failed to delete product!")
+
+        self._parse_library(creators, _handle)

@@ -2,24 +2,70 @@ import gc
 import logging
 import signal
 import sys
+from argparse import ArgumentParser
 from configparser import RawConfigParser
-from typing import cast
+from typing import Any, cast
 
 from pathlib3x import Path
 from rich.logging import RichHandler
 
 from .cli import get_cli_arg_parser
-from .scrapper import GumroadScrapper, GumroadSession
+from .scrapper import GumroadDownloader, GumroadSession, GumroadWiper
 
 
-def _set_sigint_handler(scrapper: GumroadScrapper, cache_file: Path) -> None:
+def _get_creators(args: Any) -> set[str]:
+    if isinstance(args.creator, str):
+        return {args.creator}
+    elif isinstance(args.creator, list):
+        return set(args.creator)
+    else:
+        return {}
+
+
+def _execute_download(args: Any, config: RawConfigParser, session: GumroadSession) -> None:
+    if isinstance(args.link, str) and (args.link == "library"):
+        links = []
+    elif isinstance(args.link, list):
+        links = args.link
+    elif args.links:
+        links = cast(Path, args.links).open().readlines()
+        if not links:
+            logging.getLogger().debug("File with links is empty.")
+            return
+
+    dl = GumroadDownloader(
+        session,
+        root_folder=args.output,
+        product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
+    )
+
+    cache_file = cast("Path", args.config).parent / "gumroad.cache"
+    dl.load_cache(cache_file)
+
+    # Set SIGINT handler
+
     original_sigint_handler = signal.getsignal(signal.SIGINT)
 
     def _sigint_handler(signal, frame):
-        scrapper.save_cache(cache_file)
+        dl.save_cache(cache_file)
         original_sigint_handler(signal, frame)
 
     signal.signal(signal.SIGINT, _sigint_handler)
+
+    # Download
+
+    if links:
+        for link in links:
+            dl.scrap_product_page(link)
+            gc.collect()
+    else:
+        dl.scrape_library(_get_creators(args))
+
+    dl.save_cache(cache_file)
+
+
+def _execute_wipe(args: Any, config: RawConfigParser, session: GumroadSession) -> None:
+    GumroadWiper(session).wipe(_get_creators(args))
 
 
 def main() -> None:
@@ -46,46 +92,11 @@ def main() -> None:
         guid=config["user"]["guid"],
         user_agent=config["user"]["user_agent"],
     )
-    scrapper = GumroadScrapper(
-        session,
-        root_folder=args.output,
-        product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
-    )
 
     try:
-        if isinstance(args.link, str) and (args.link == "library"):
-            links = []
-        elif isinstance(args.link, list):
-            links = args.link
-        elif args.links:
-            links = cast(Path, args.links).open().readlines()
-            if not links:
-                logging.getLogger().debug("File with links is empty.")
-                return
-
-        if isinstance(args.creator, str):
-            creators = {args.creator}
-        elif isinstance(args.creator, list):
-            creators = set(args.creator)
-        else:
-            creators = {}
-
-        cache_file = cast("Path", args.config).parent / "gumroad.cache"
-        scrapper.load_cache(cache_file)
-
-        _set_sigint_handler(scrapper, cache_file)
-
-        if links:
-            for link in links:
-                scrapper.scrap_product_page(link)
-                gc.collect()
-        else:
-            scrapper.scrape_library(creators)
-
+        {"dl": _execute_download, "wipe": _execute_wipe}[args.command](args, config, session)
     except Exception:
         logging.getLogger().exception("")
-
-    scrapper.save_cache(cache_file)
 
 
 if __name__ == "__main__":
