@@ -38,7 +38,7 @@ def shorten(s: str, n: int = 40) -> str:
     n_2 = int(n) / 2 - 3
     n_1 = n - n_2 - 3
 
-    return "{0}..{1}".format(s[:n_1], s[-n_2:])
+    return "{0}..{1}".format(s[:int(n_1)], s[-int(n_2):])
 
 
 class GumroadSession(_RequestsSession):
