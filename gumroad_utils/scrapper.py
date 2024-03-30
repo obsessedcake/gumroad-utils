@@ -2,10 +2,11 @@ import json
 import logging
 import re
 import sys
-from datetime import date, datetime
+from datetime import date
 
 import humanize
 from bs4 import BeautifulSoup
+from dateutil.parser import parse as parse_date
 from pathlib3x import Path
 from requests import Session as _RequestsSession
 from rich.progress import Progress as RichProgress
@@ -123,7 +124,7 @@ class GumroadScrapper:
                 )
                 continue
 
-            updated_at = datetime.fromisoformat(result["product"]["updated_at"]).date()
+            updated_at = parse_date(result["product"]["updated_at"]).date()
             self.scrap_product_page(result["purchase"]["download_url"], updated_at)
 
     # Pages - Product content
@@ -148,7 +149,7 @@ class GumroadScrapper:
 
         recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
         price = self._scrap_recipe_page(recipe_link)
-        purchase_date = datetime.fromisoformat(script["purchase"]["created_at"]).date()
+        purchase_date = parse_date(script["purchase"]["created_at"]).date()
 
         try:
             product_folder_name = self._product_folder_tmpl.format(
