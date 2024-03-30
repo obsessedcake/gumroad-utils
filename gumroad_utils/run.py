@@ -50,6 +50,7 @@ def main() -> None:
         session,
         root_folder=args.output,
         product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
+        slash_replacement=config["scrapper"]["slash_replacement"],
     )
 
     try:
