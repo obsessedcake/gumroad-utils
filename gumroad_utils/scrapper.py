@@ -61,11 +61,12 @@ class GumroadSession(_RequestsSession):
 
 class GumroadScrapper:
     def __init__(
-        self, session: GumroadSession, root_folder: Path, product_folder_tmpl: str
+        self, session: GumroadSession, root_folder: Path, product_folder_tmpl: str, slash_replacement: str
     ) -> None:
         self._session = session
         self._root_folder = root_folder
         self._product_folder_tmpl = product_folder_tmpl
+        self._slash_replacement = slash_replacement
 
         self._files_cache: dict[str, set] = {}
         self._logger = logging.getLogger()
@@ -143,8 +144,8 @@ class GumroadScrapper:
 
         product_name = script["purchase"]["product_name"]
         if "/" in product_name:
-            self._logger.warning("Product has '/' in its name!")
-            product_name = product_name.replace("/", "-")
+            self._logger.warning("Product has '/' in its name! Replaced it with %r.", self._slash_replacement)
+            product_name = product_name.replace("/", self._slash_replacement)
 
         recipe_link = f"{self._session.base_url}/purchases/{script['purchase']['id']}/receipt"
         price = self._scrap_recipe_page(recipe_link)
