@@ -8,6 +8,7 @@ install_requires = [
     "humanize",
     "lxml",
     "pathlib3x",
+    "python-dateutil",
     "requests>=2.26.0",
     "rich>=13.0.0",
 ]
