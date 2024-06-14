@@ -141,7 +141,7 @@ class GumroadScrapper:
 
         script = _load_json_data(soup, "DownloadPageWithContent")
 
-        product_creator = script["creator"]["name"]
+        product_creator = script["creator"]["name"].strip()
 
         product_name = script["purchase"]["product_name"]
         if "/" in product_name:
@@ -158,7 +158,7 @@ class GumroadScrapper:
                 purchase_at=purchase_date,
                 uploaded_at=uploaded_at,
                 price=price,
-            )
+            ).strip()
         except TypeError:
             self._logger.info("'uploaded_at' is not available!")
             sys.exit()
@@ -213,7 +213,9 @@ class GumroadScrapper:
 
                 folder_name = item["name"]
                 _traverse_tree(
-                    item["children"], tree_path / folder_name, parent_folder / folder_name
+                    item["children"],
+                    tree_path / folder_name.strip(),
+                    parent_folder / folder_name.strip(),
                 )
 
             for item in items:
