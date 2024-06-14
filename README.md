@@ -68,15 +68,17 @@ This project exposes a `gumroad_utils` package that exposes [gumroad.com](gumroa
 ```python
 from pathlib import Path
 
-from gumroad_utils import GumroadScrapper, GumroadSession
+from gumroad_utils import FilesCache, GumroadScrapper, GumroadSession
 
 session = GumroadSession(
     app_session="MyAppSession",
     guid="MyGuid",
     user_agent="MyUserAgent",
 )
+files_cache = FilesCache("gumroad.cache")
 scrapper = GumroadScrapper(
     session,
+    files_cache,
     root_folder=Path.cwd(),
     product_folder_tmpl="{product_name}",
 )

@@ -9,14 +9,14 @@ from pathlib3x import Path
 from rich.logging import RichHandler
 
 from .cli import get_cli_arg_parser
-from .scrapper import GumroadScrapper, GumroadSession
+from .scrapper import FilesCache, GumroadScrapper, GumroadSession
 
 
-def _set_sigint_handler(scrapper: GumroadScrapper, cache_file: Path) -> None:
+def _set_sigint_handler(files_cache: FilesCache) -> None:
     original_sigint_handler = signal.getsignal(signal.SIGINT)
 
     def _sigint_handler(signal, frame):
-        scrapper.save_cache(cache_file)
+        files_cache.save()
         original_sigint_handler(signal, frame)
 
     signal.signal(signal.SIGINT, _sigint_handler)
@@ -46,6 +46,7 @@ def main() -> None:
         guid=config["user"]["guid"],
         user_agent=config["user"]["user_agent"],
     )
+    files_cache = FilesCache(cast("Path", args.config).parent / "gumroad.cache")
     scrapper = GumroadScrapper(
         session,
         root_folder=args.output,
@@ -71,10 +72,8 @@ def main() -> None:
         else:
             creators = {}
 
-        cache_file = cast("Path", args.config).parent / "gumroad.cache"
-        scrapper.load_cache(cache_file)
-
-        _set_sigint_handler(scrapper, cache_file)
+        files_cache.load()
+        _set_sigint_handler(files_cache)
 
         if links:
             for link in links:
@@ -86,7 +85,7 @@ def main() -> None:
     except Exception:
         logging.getLogger().exception("")
 
-    scrapper.save_cache(cache_file)
+    files_cache.save()
 
 
 if __name__ == "__main__":

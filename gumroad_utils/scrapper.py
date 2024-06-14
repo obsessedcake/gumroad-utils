@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import sys
+from collections import defaultdict
 from datetime import date
 
 import humanize
@@ -60,44 +61,51 @@ class GumroadSession(_RequestsSession):
         return BeautifulSoup(response.content, "lxml")
 
 
+class FilesCache:
+    def __init__(self, file_path: Path) -> None:
+        self._file_path = file_path
+        self._storage: dict[str, set] = defaultdict(set)
+        self._logger = logging.getLogger("cache")
+
+    def load(self) -> None:
+        if not self._file_path.exists():
+            return
+
+        with open(self._file_path, "r", encoding="utf-8") as f:
+            for k, v in json.load(f).items():
+                self._storage[k] = set(v)
+
+        self._logger.debug("Cache has been loaded.")
+
+    def save(self) -> None:
+        with open(self._file_path, "w", encoding="utf-8") as f:
+            json.dump(self._storage, f, default=list, indent=2)
+
+        self._logger.debug("Cache has been saved.")
+
+    def is_cached(self, product_id: str, file_id: str) -> bool:
+        return file_id in self._storage.get(product_id, [])
+
+    def cache(self, product_id: str, file_id: str) -> None:
+        self._storage[product_id].add(file_id)
+
+
 class GumroadScrapper:
     def __init__(
-        self, session: GumroadSession, root_folder: Path, product_folder_tmpl: str, slash_replacement: str
+        self,
+        session: GumroadSession,
+        files_cache: FilesCache,
+        root_folder: Path,
+        product_folder_tmpl: str,
+        slash_replacement: str
     ) -> None:
         self._session = session
         self._root_folder = root_folder
         self._product_folder_tmpl = product_folder_tmpl
         self._slash_replacement = slash_replacement
 
-        self._files_cache: dict[str, set] = {}
-        self._logger = logging.getLogger()
-
-    # Cache
-
-    def load_cache(self, file_path: Path) -> None:
-        if not file_path.exists():
-            return
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            for k, v in json.load(f).items():
-                self._files_cache[k] = set(v)
-
-        self._logger.debug("Cache has been loaded.")
-
-    def save_cache(self, file_path: Path) -> None:
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(self._files_cache, f, default=list, indent=2)
-
-        self._logger.debug("Cache has been saved.")
-
-    def _is_file_cached(self, product_id: str, file_id: str) -> bool:
-        return file_id in self._files_cache.get(product_id, [])
-
-    def _cache_file(self, product_id: str, file_id: str) -> None:
-        if product_id not in self._files_cache:
-            self._files_cache[product_id] = set([file_id])
-        else:
-            self._files_cache[product_id].add(file_id)
+        self._files_cache = files_cache
+        self._logger = logging.getLogger("scraper")
 
     # Pages - Library
 
@@ -269,7 +277,7 @@ class GumroadScrapper:
     ) -> None:
         tree_file_path = tree_path / file_path.name
 
-        if self._is_file_cached(product_id, file_id):
+        if self._files_cache.is_cached(product_id, file_id):
             self._logger.debug("'%s' is already downloaded! Skipping.", tree_file_path)
             return
 
@@ -300,7 +308,7 @@ class GumroadScrapper:
                         progress.advance(task, len(chunk))
                         file.write(chunk)
 
-        self._cache_file(product_id, file_id)
+        self._files_cache.cache(product_id, file_id)
 
     # Utils
 
