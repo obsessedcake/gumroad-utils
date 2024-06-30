@@ -156,11 +156,14 @@ class GumroadScrapper:
 
         script = _load_json_data(soup, "DownloadPageWithContent")
 
-        product_creator = script["creator"]["name"].strip()
-
-        product_name = script["purchase"]["product_name"]
-        # NOTE(PxINKY): This is for window machines, as windows does not allow the following special characters in directory names and some creators include them in names
-        product_name = re.sub(r'[<>:"/\\|?*]', '', product_name)
+        # NOTE(PxINKY) Gumroad filters the username (Page URL / Profile Link username) on creation/edit
+        # but not the "name" (["creator"]["name"]) from having invalid characters
+        # additionally filenames can also contain invalid characters
+        # Issue arises if the file_name is something like: 'File 1.0 / 2.0'
+        # Simply sanitizing the filename before using it fixes this issue
+        product_creator = self.sanitize_filename(script["creator"]["name"].strip())
+        product_name = self.sanitize_filename(script["purchase"]["product_name"])
+        
         if "/" in product_name:
             self._logger.warning("Product has '/' in its name! Replaced it with %r.", self._slash_replacement)
             product_name = product_name.replace("/", self._slash_replacement)
@@ -276,8 +279,14 @@ class GumroadScrapper:
         self._logger.warning("Failed to extract payment info from %s", url)
         return ""
 
+    # NOTE(PxINKY) Path sanitizer
+    def sanitize_filename(self, filename: str, replacement: str = "_") -> str:
+        invalid_chars = '<>:"/\\|?*'
+        # Replace invalid characters and spaces with underscores
+        sanitized_filename = ''.join(replacement if c in invalid_chars or c == ' ' else c for c in filename)
+        return sanitized_filename
+    
     # File downloader
-
     def _fancy_download_file(
         self,
         product_id: str,
