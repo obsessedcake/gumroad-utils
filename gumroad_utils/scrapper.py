@@ -234,8 +234,8 @@ class GumroadScrapper:
                 )
 
             for item in items:
-                # NOTE(PxINKY) Gumroad added a "file" type that is just a URL with a button, but this flags as a 0 byte file. So this will catch it
-                if item["type"] != "file" or item["file_size"] is None:
+                # NOTE(PxINKY) Gumroad added a "file" type that's embedded into the page resulting in no download_url
+                if item["type"] != "file" or item["download_url"] is None:
                     continue
 
                 file_id = item["id"]
