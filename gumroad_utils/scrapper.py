@@ -262,14 +262,19 @@ class GumroadScrapper:
         _traverse_tree(script["content"]["content_items"], Path("/"), parent_folder)
 
     # Pages - Recipe
-
+    # NOTE(PxINKY) If the purchase is a gift, A recite cant be generated, return empty
     def _scrap_recipe_page(self, url: str) -> str:
         soup = self._session.get_soup(url)
 
-        payment_info = soup.select_one(".main > div:nth-child(1) > div").string
-        price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
+        payment_info_element = soup.select_one(".main > div:nth-child(1) > div")
+        if payment_info_element:
+            payment_info = payment_info_element.string
+            if payment_info:
+                price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
+                return price
 
-        return price
+        self._logger.warning("Failed to extract payment info from %s", url)
+        return ""
 
     # File downloader
 
