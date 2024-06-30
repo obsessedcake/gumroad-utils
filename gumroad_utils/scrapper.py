@@ -159,6 +159,8 @@ class GumroadScrapper:
         product_creator = script["creator"]["name"].strip()
 
         product_name = script["purchase"]["product_name"]
+        # NOTE(PxINKY): This is for window machines, as windows does not allow the following special characters in directory names and some creators include them in names
+        product_name = re.sub(r'[<>:"/\\|?*]', '', product_name)
         if "/" in product_name:
             self._logger.warning("Product has '/' in its name! Replaced it with %r.", self._slash_replacement)
             product_name = product_name.replace("/", self._slash_replacement)
