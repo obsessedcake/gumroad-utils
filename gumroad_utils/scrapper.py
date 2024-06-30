@@ -161,8 +161,8 @@ class GumroadScrapper:
         # additionally filenames can also contain invalid characters
         # Issue arises if the file_name is something like: 'File 1.0 / 2.0'
         # Simply sanitizing the filename before using it fixes this issue
-        product_creator = self.sanitize_filename(script["creator"]["name"].strip())
-        product_name = self.sanitize_filename(script["purchase"]["product_name"])
+        product_creator = self.sanitize_filename(script["creator"]["name"].strip(), self._slash_replacement)
+        product_name = self.sanitize_filename(script["purchase"]["product_name"], self._slash_replacement)
         
         if "/" in product_name:
             self._logger.warning("Product has '/' in its name! Replaced it with %r.", self._slash_replacement)
@@ -280,7 +280,7 @@ class GumroadScrapper:
         return ""
 
     # NOTE(PxINKY) Path sanitizer
-    def sanitize_filename(self, filename: str, replacement: str = "_") -> str:
+    def sanitize_filename(self, filename: str, replacement: str) -> str:
         invalid_chars = '<>:"/\\|?*'
         # Replace invalid characters and spaces with underscores
         sanitized_filename = ''.join(replacement if c in invalid_chars or c == ' ' else c for c in filename)
