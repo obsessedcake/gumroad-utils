@@ -234,7 +234,8 @@ class GumroadScrapper:
                 )
 
             for item in items:
-                if item["type"] != "file":
+                # NOTE(PxINKY) Gumroad added a "file" type that is just a URL with a button, but this flags as a 0 byte file. So this will catch it
+                if item["type"] != "file" or item["file_size"] is None:
                     continue
 
                 file_id = item["id"]
