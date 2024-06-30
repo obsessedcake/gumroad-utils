@@ -119,8 +119,15 @@ class GumroadScrapper:
             creator_username = re.search(
                 r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
             ).group(1)
-
-            creator = result["product"]["creator"]["name"]
+            
+            # NOTE(PxINKY): Swapping to ID as a static variable, we can use a try-catch to reassign it if the creator's name does exist!
+            creator = result["product"]["creator_id"]
+            try:
+                creator = result["product"]["creator"]["name"]
+            except:
+                self._logger.warning(
+                    "Defaulting to creator ID (%r), creators name is missing", creator
+                    )
             product = result["product"]["name"]
 
             if creator_username not in creators:
