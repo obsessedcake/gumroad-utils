@@ -119,8 +119,15 @@ class GumroadScrapper:
             creator_username = re.search(
                 r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
             ).group(1)
-
-            creator = result["product"]["creator"]["name"]
+            
+            # NOTE(PxINKY): Swapping to ID as a static variable, we can use a try-catch to reassign it if the creator's name does exist!
+            creator = result["product"]["creator_id"]
+            try:
+                creator = result["product"]["creator"]["name"]
+            except:
+                self._logger.warning(
+                    "Defaulting to creator ID (%r), creators name is missing", creator
+                    )
             product = result["product"]["name"]
 
             if creator_username not in creators:
@@ -149,9 +156,14 @@ class GumroadScrapper:
 
         script = _load_json_data(soup, "DownloadPageWithContent")
 
-        product_creator = script["creator"]["name"].strip()
-
-        product_name = script["purchase"]["product_name"]
+        # NOTE(PxINKY) Gumroad filters the username (Page URL / Profile Link username) on creation/edit
+        # but not the "name" (["creator"]["name"]) from having invalid characters
+        # additionally filenames can also contain invalid characters
+        # Issue arises if the file_name is something like: 'File 1.0 / 2.0'
+        # Simply sanitizing the filename before using it fixes this issue
+        product_creator = self.sanitize_filename(script["creator"]["name"].strip())
+        product_name = self.sanitize_filename(script["purchase"]["product_name"])
+        
         if "/" in product_name:
             self._logger.warning("Product has '/' in its name! Replaced it with %r.", self._slash_replacement)
             product_name = product_name.replace("/", self._slash_replacement)
@@ -227,7 +239,8 @@ class GumroadScrapper:
                 )
 
             for item in items:
-                if item["type"] != "file":
+                # NOTE(PxINKY) Gumroad added a "file" type that's embedded into the page resulting in no download_url
+                if item["type"] != "file" or item["download_url"] is None:
                     continue
 
                 file_id = item["id"]
@@ -252,17 +265,28 @@ class GumroadScrapper:
         _traverse_tree(script["content"]["content_items"], Path("/"), parent_folder)
 
     # Pages - Recipe
-
+    # NOTE(PxINKY) If the purchase is a gift, A recite cant be generated, return empty
     def _scrap_recipe_page(self, url: str) -> str:
         soup = self._session.get_soup(url)
 
-        payment_info = soup.select_one(".main > div:nth-child(1) > div").string
-        price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
+        payment_info_element = soup.select_one(".main > div:nth-child(1) > div")
+        if payment_info_element:
+            payment_info = payment_info_element.string
+            if payment_info:
+                price = payment_info.strip().split("\n")[0]  # \n$9.99\n— VISA *0000
+                return price
 
-        return price
+        self._logger.warning("Failed to extract payment info from %s", url)
+        return ""
 
+    # NOTE(PxINKY) Path sanitizer
+    def sanitize_filename(self, filename: str) -> str:
+        invalid_chars = '<>:"/\\|?*'
+        # Replace invalid characters and spaces with underscores
+        sanitized_filename = ''.join(self._slash_replacement if c in invalid_chars or c == ' ' else c for c in filename)
+        return sanitized_filename
+    
     # File downloader
-
     def _fancy_download_file(
         self,
         product_id: str,
