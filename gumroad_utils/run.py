@@ -49,6 +49,7 @@ def main() -> None:
     files_cache = FilesCache(cast("Path", args.config).parent / "gumroad.cache")
     scrapper = GumroadScrapper(
         session,
+        files_cache,
         root_folder=args.output,
         product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
         slash_replacement=config["scrapper"]["slash_replacement"],
@@ -80,7 +81,7 @@ def main() -> None:
                 scrapper.scrap_product_page(link)
                 gc.collect()
         else:
-            scrapper.scrape_library(creators)
+            scrapper.scrape_library(creators, dl_all=args.dl_all)
 
     except Exception:
         logging.getLogger().exception("")

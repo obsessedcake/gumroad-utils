@@ -109,7 +109,11 @@ class GumroadScrapper:
 
     # Pages - Library
 
-    def scrape_library(self, creators: set[str]) -> None:
+    def scrape_library(
+            self,
+            creators: set[str],
+            dl_all: bool=False
+        ) -> None:
         soup = self._session.get_soup(self._session.base_url + "/library")
         self._detect_redirect(soup)
 
@@ -117,7 +121,7 @@ class GumroadScrapper:
         for result in script["results"]:
             creator_profile_url = result["product"]["creator"]["profile_url"]
             creator_username = re.search(
-                r"https:\/\/(.*)\.gumroad\.com\/", creator_profile_url
+                r"https:\/\/(.*)\.gumroad\.com", creator_profile_url
             ).group(1)
             
             # NOTE(PxINKY): Swapping to ID as a static variable, we can use a try-catch to reassign it if the creator's name does exist!
@@ -130,7 +134,7 @@ class GumroadScrapper:
                     )
             product = result["product"]["name"]
 
-            if creator_username not in creators:
+            if not dl_all and creator_username not in creators:
                 self._logger.debug("Skipping %r product of %r.", product, creator)
                 continue
 
