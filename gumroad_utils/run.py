@@ -49,6 +49,7 @@ def main() -> None:
     files_cache = FilesCache(cast("Path", args.config).parent / "gumroad.cache")
     scrapper = GumroadScrapper(
         session,
+        files_cache,
         root_folder=args.output,
         product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
         slash_replacement=config["scrapper"]["slash_replacement"],
