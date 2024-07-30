@@ -109,7 +109,11 @@ class GumroadScrapper:
 
     # Pages - Library
 
-    def scrape_library(self, creators: set[str]) -> None:
+    def scrape_library(
+            self,
+            creators: set[str],
+            dl_all: bool=False
+        ) -> None:
         soup = self._session.get_soup(self._session.base_url + "/library")
         self._detect_redirect(soup)
 
@@ -130,7 +134,7 @@ class GumroadScrapper:
                     )
             product = result["product"]["name"]
 
-            if creator_username not in creators:
+            if not dl_all and creator_username not in creators:
                 self._logger.debug("Skipping %r product of %r.", product, creator)
                 continue
 

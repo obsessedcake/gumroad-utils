@@ -63,5 +63,11 @@ def get_cli_arg_parser() -> ArgumentParser:
         help="An output directory (default: current directory).",
         default=Path.cwd(),
     )
+    parser.add_argument(
+        "-a",
+        "--dl-all",
+        action="store_true",
+        help="Download all creators (default: false)"
+    )
 
     return parser

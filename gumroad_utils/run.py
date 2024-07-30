@@ -81,7 +81,7 @@ def main() -> None:
                 scrapper.scrap_product_page(link)
                 gc.collect()
         else:
-            scrapper.scrape_library(creators)
+            scrapper.scrape_library(creators, dl_all=args.dl_all)
 
     except Exception:
         logging.getLogger().exception("")
