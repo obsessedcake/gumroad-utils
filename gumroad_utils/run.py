@@ -45,15 +45,17 @@ def main() -> None:
         app_session=config["user"]["app_session"],
         guid=config["user"]["guid"],
         user_agent=config["user"]["user_agent"],
+        email=config["user"].get("email", ""),
+        cf_clearance=config["user"].get("cf_clearance", ""),
     )
     files_cache = FilesCache(cast("Path", args.config).parent / "gumroad.cache")
     scrapper = GumroadScrapper(
         session,
+        files_cache,
         root_folder=args.output,
         product_folder_tmpl=config["scrapper"]["product_folder_tmpl"],
         slash_replacement=config["scrapper"]["slash_replacement"],
     )
-
     try:
         if isinstance(args.link, str) and (args.link == "library"):
             links = []
