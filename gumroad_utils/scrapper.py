@@ -44,19 +44,52 @@ def shorten(s: str, n: int = 40) -> str:
 
 
 class GumroadSession(_RequestsSession):
-    def __init__(self, app_session: str, guid: str, user_agent: str) -> None:
+    def __init__(
+        self,
+        app_session: str,
+        guid: str,
+        user_agent: str,
+        email: str = "",
+        cf_clearance: str = "",
+    ) -> None:
         super().__init__()
 
         self.cookies.set("_gumroad_app_session", _sanitize_cookie_value(app_session))
         self.cookies.set("_gumroad_guid", guid)
+
+        # Cloudflare clearance cookie - required to bypass Cloudflare protection
+        if cf_clearance:
+            self.cookies.set("cf_clearance", cf_clearance, domain=".gumroad.com")
+
         self.headers["User-Agent"] = user_agent
+        self.email = email
 
     @property
     def base_url(self) -> str:
         return "https://app.gumroad.com"
 
+    def normalize_url(self, url: str) -> str:
+        """Normalize URLs to use app.gumroad.com instead of gumroad.com"""
+        # Replace gumroad.com with app.gumroad.com (avoid Cloudflare blocks)
+        if "://gumroad.com/" in url:
+            url = url.replace("://gumroad.com/", "://app.gumroad.com/")
+        return url
+
     def get_soup(self, url: str) -> BeautifulSoup:
-        response = self.get(url, allow_redirects=False)
+        url = self.normalize_url(url)
+        response = self.get(url, allow_redirects=True)
+
+        # Check for Cloudflare challenge
+        if response.status_code == 403 and response.headers.get("cf-mitigated") == "challenge":
+            raise RuntimeError(
+                "Cloudflare is blocking the request. Please add your cf_clearance cookie to config.ini.\n"
+                "To get it:\n"
+                "1. Open gumroad.com in your browser\n"
+                "2. Open DevTools (F12) > Application > Cookies > gumroad.com\n"
+                "3. Copy the value of 'cf_clearance' cookie\n"
+                "4. Add it to config.ini: cf_clearance = <your_value>"
+            )
+
         response.raise_for_status()
         return BeautifulSoup(response.content, "lxml")
 
@@ -169,12 +202,16 @@ class GumroadScrapper:
         if url.isalnum():
             url = f"{self._session.base_url}/d/{url}"
 
+        # Normalize URL to app.gumroad.com
+        url = self._session.normalize_url(url)
+
         self._logger.info("Scrapping %r...", url)
 
         soup = self._session.get_soup(url)
         self._detect_redirect(soup)
 
-        script = _load_json_data(soup, "DownloadPageWithContent")
+        # Check if email confirmation is required
+        soup, script = self._handle_email_confirmation(soup, url)
 
         # NOTE(PxINKY) Gumroad filters the username (Page URL / Profile Link username) on creation/edit
         # but not the "name" (["creator"]["name"]) from having invalid characters
@@ -362,6 +399,102 @@ class GumroadScrapper:
 
 
     # Utils
+
+    def _handle_email_confirmation(self, soup: BeautifulSoup, url: str) -> tuple[BeautifulSoup, dict]:
+        """Handle email confirmation flow if required by Gumroad."""
+        # Try to load DownloadPageWithContent first (normal flow)
+        script_tag = soup.find(
+            "script",
+            attrs={
+                "class": "js-react-on-rails-component",
+                "data-component-name": "DownloadPageWithContent",
+            },
+        )
+
+        if script_tag:
+            return soup, json.loads(script_tag.string)
+
+        # Check if we're on an email confirmation page
+        script_tag = soup.find(
+            "script",
+            attrs={
+                "class": "js-react-on-rails-component",
+                "data-component-name": "DownloadPageWithoutContent",
+            },
+        )
+
+        if not script_tag:
+            raise RuntimeError("Could not find download page data. The page structure may have changed.")
+
+        data = json.loads(script_tag.string)
+
+        # Check if email confirmation is required
+        if data.get("content_unavailability_reason_code") != "email_confirmation_required":
+            raise RuntimeError(f"Content unavailable: {data.get('content_unavailability_reason_code', 'unknown reason')}")
+
+        if not self._session.email:
+            raise RuntimeError(
+                "Email confirmation required by Gumroad. "
+                "Please add 'email = your@email.com' to the [user] section of your config.ini"
+            )
+
+        self._logger.info("Email confirmation required, submitting confirmation form...")
+
+        # Get the CSRF token from the page
+        csrf_token = data.get("authenticity_token", "")
+        if not csrf_token:
+            meta_tag = soup.find("meta", attrs={"name": "csrf-token"})
+            if meta_tag:
+                csrf_token = meta_tag.get("content", "")
+
+        confirmation_info = data.get("confirmation_info", {})
+        confirm_id = confirmation_info.get("id", "")
+        destination = confirmation_info.get("destination", "download_page")
+        display = confirmation_info.get("display", "")
+
+        # Submit the email confirmation form
+        confirm_url = f"{self._session.base_url}/confirm-redirect"
+        form_data = {
+            "utf8": "✓",
+            "authenticity_token": csrf_token,
+            "id": confirm_id,
+            "destination": destination,
+            "display": display,
+            "email": self._session.email,
+        }
+
+        response = self._session.post(confirm_url, data=form_data, allow_redirects=True)
+        response.raise_for_status()
+
+        # Parse the response - should now be the actual download page
+        soup = BeautifulSoup(response.content, "lxml")
+        self._detect_redirect(soup)
+
+        script_tag = soup.find(
+            "script",
+            attrs={
+                "class": "js-react-on-rails-component",
+                "data-component-name": "DownloadPageWithContent",
+            },
+        )
+
+        if not script_tag:
+            # Check if still on confirmation page (wrong email?)
+            still_confirm = soup.find(
+                "script",
+                attrs={
+                    "class": "js-react-on-rails-component",
+                    "data-component-name": "DownloadPageWithoutContent",
+                },
+            )
+            if still_confirm:
+                raise RuntimeError(
+                    "Email confirmation failed. Make sure the email in config.ini matches "
+                    "the email used to purchase this product."
+                )
+            raise RuntimeError("Could not load download page after email confirmation.")
+
+        return soup, json.loads(script_tag.string)
 
     def _detect_redirect(self, soup: BeautifulSoup) -> None:
         text = soup.find(text=True, recursive=False)

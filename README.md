@@ -38,11 +38,15 @@ pip install -e .
 
 You need to rename [config.tmpl.ini](config.tmpl.ini) into `config.ini` and put a correct data there.
 
+All cookies can be obtained from your browser's DevTools (F12) > Application > Cookies > gumroad.com:
+
 - `app_session` -> `_gumroad_app_session` cookie value,
 - `guid` -> `_gumroad_guid` cookie value,
-- `user_agent` -> your user agent.
+- `user_agent` -> your browser's user agent,
+- `email` -> the email address used to purchase products (required for Gumroad's email confirmation flow),
+- `cf_clearance` -> `cf_clearance` cookie value (required to bypass Cloudflare protection).
 
-Please take into account that `_gumroad_app_session` changes quite often so don't be afraid that suddenly nothing works.
+Please take into account that `_gumroad_app_session` and `cf_clearance` change quite often so don't be afraid that suddenly nothing works - just update them from your browser.
 
 ### Product folder
 
@@ -74,6 +78,8 @@ session = GumroadSession(
     app_session="MyAppSession",
     guid="MyGuid",
     user_agent="MyUserAgent",
+    email="my@email.com",
+    cf_clearance="MyCfClearance",
 )
 files_cache = FilesCache("gumroad.cache")
 scrapper = GumroadScrapper(
@@ -81,6 +87,7 @@ scrapper = GumroadScrapper(
     files_cache,
     root_folder=Path.cwd(),
     product_folder_tmpl="{product_name}",
+    slash_replacement="-",
 )
 scrapper.scrape_library()
 ```
